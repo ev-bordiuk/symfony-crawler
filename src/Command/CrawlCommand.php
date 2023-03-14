@@ -10,6 +10,8 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\Routing\RouterInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 #[AsCommand(
     name: 'crawl',
@@ -19,43 +21,63 @@ class CrawlCommand extends Command
 {
   protected const VALID_URL_PATTERN = "/^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$/";
 
-  protected $targetUrl = null;
-  protected $domain    = null;
+  protected $targetUrl;
+  protected $domain;
+  protected $io;
 
+  /**
+   * @inheritdoc
+   */
+  public function __construct(private RouterInterface $router)
+  {
+      parent::__construct();
+  }
 
+  /**
+   * @inheritdoc
+   */
+  protected function initialize(InputInterface $input, OutputInterface $output): void
+  {
+    $this->targetUrl = $this->extractUrl($input->getArgument('url'));
+    $this->io = new SymfonyStyle($input, $output);
+  }
+
+  /**
+   * @inheritdoc
+   */
   protected function configure(): void
   {
     $this->addArgument('url', InputArgument::REQUIRED, 'Specify target url');
   }
 
+  /**
+   * @inheritdoc
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int
   {
-    $io = new SymfonyStyle($input, $output);
-
-    $this->setInputVariables($input);
-    
     if (!$this->targetUrl) {
-      $io->error('Please, provide correct url address.');
+      $this->io->error('Please, provide correct url address.');
       return Command::INVALID;
     }
+
+    $this->domain = parse_url($this->targetUrl, PHP_URL_HOST);
     
     try {
       $this->perform();
     
-      $io->success(sprintf('Task completed, please proceed to %s to see results'), );
+      $this->io->success(
+        sprintf(
+          'Task completed, please proceed to %s to see results',
+          $this->router->generate('app_results', [], UrlGeneratorInterface::ABSOLUTE_URL)
+        )
+      );
 
       return Command::SUCCESS;
     } catch (\Exception $e) {
 
-      $io->error($e->getMessage());
+      $this->io->error($e->getMessage());
       return Command::FAILURE;
     }
-  }
-
-  protected function setInputVariables($input)
-  {
-    $this->targetUrl = $this->extractUrl($input->getArgument('url'));
-    $this->domain    = parse_url($this->targetUrl, PHP_URL_HOST);
   }
 
   /**
