@@ -9,9 +9,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use App\Service\CrawlWorker;
 
 #[AsCommand(
     name: 'crawl',
@@ -22,13 +22,13 @@ class CrawlCommand extends Command
   protected const VALID_URL_PATTERN = "/^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$/";
 
   protected $targetUrl;
-  protected $domain;
+  protected $options = [];
   protected $io;
 
   /**
    * @inheritdoc
    */
-  public function __construct(private RouterInterface $router)
+  public function __construct(protected CrawlWorker $crawlWorker, protected RouterInterface $router)
   {
       parent::__construct();
   }
@@ -47,7 +47,11 @@ class CrawlCommand extends Command
    */
   protected function configure(): void
   {
-    $this->addArgument('url', InputArgument::REQUIRED, 'Specify target url');
+    $this
+      ->addArgument('url', InputArgument::REQUIRED, 'Specify target url')
+      ->addOption('timeout', 't',  InputOption::VALUE_OPTIONAL, 'Stops script executing when time is reached')
+      ->addOption('deep', 'd',  InputOption::VALUE_OPTIONAL, 'Specify how deep links should be used')
+      ->addOption('pages', 'p',  InputOption::VALUE_OPTIONAL, 'Max number of parsed pages');
   }
 
   /**
@@ -55,15 +59,14 @@ class CrawlCommand extends Command
    */
   protected function execute(InputInterface $input, OutputInterface $output): int
   {
-    if (!$this->targetUrl) {
+    if ($this->targetUrl == null) {
       $this->io->error('Please, provide correct url address.');
+
       return Command::INVALID;
     }
 
-    $this->domain = parse_url($this->targetUrl, PHP_URL_HOST);
-    
     try {
-      $this->perform();
+      $this->crawlWorker->perform($this->targetUrl);
     
       $this->io->success(
         sprintf(
@@ -73,36 +76,11 @@ class CrawlCommand extends Command
       );
 
       return Command::SUCCESS;
-    } catch (\Exception $e) {
-
+    } catch (CrawlException | \Exception $e) {
       $this->io->error($e->getMessage());
+
       return Command::FAILURE;
     }
-  }
-
-  /**
-   * 
-   */
-  protected function perform()
-  {
-    $html = file_get_contents($this->targetUrl);
-
-    $crawler = new Crawler($html, null, $this->targetUrl);
-    $occuranciesCount = 0;
-
-    foreach ($crawler->filter('body img')->images() as $image) {
-      if ($this->belongsToDomain($image)) {
-        $occuranciesCount++;
-      }
-    }
-
-    print_r($occuranciesCount);
-    // $crawler
-    //   ->filter('body img')
-    //   ->reduce(function (Crawler $node, $i) {
-    //     // filters every other node
-    //     print_r($node->nodeName);
-    // });
   }
 
   /**
@@ -117,18 +95,5 @@ class CrawlCommand extends Command
     preg_match_all(CrawlCommand::VALID_URL_PATTERN, trim($url), $matches);
 
     return count($matches[0]) ? $matches[0][0] : null;
-  }
-
-  /**
-   * Check if image hosts on the same domain
-   * We do not check relative pathes, because they all become absolute
-   * 
-   * @param Symfony\Component\DomCrawler\Image $image
-   * 
-   * @return bool
-   */
-  protected function belongsToDomain($image): bool
-  {
-    return strstr($image->getUri(), $this->domain);
   }
 }
