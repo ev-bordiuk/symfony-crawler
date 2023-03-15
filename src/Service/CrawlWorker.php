@@ -47,8 +47,12 @@ class CrawlWorker
      */
     private function proceed(string $url, int $deep = 0)
     {
+        $stopwatch = new Stopwatch();
+        $stopwatch->start('crawling');
         $crawler = $this->buildCrawler($url);
-        $this->handlePage($crawler, $url);
+        $occuranciesCount = $this->handlePage($crawler, $url);
+        $event = $stopwatch->stop('crawling');
+        $this->saveResult($url, $occuranciesCount, $event);
 
         if ($deep <= 0) {
             return;
@@ -60,23 +64,19 @@ class CrawlWorker
     /**
      * Makes page's calculations
      */
-    private function handlePage(Crawler $crawler, string $url): void
+    private function handlePage(Crawler $crawler, string $url): int
     {
-        $stopwatch = new Stopwatch();
         $occuranciesCount = 0;
-    
-        $stopwatch->start('crawling');
 
         foreach ($crawler->filter($this->cssSelector)->images() as $image) {
             if ($this->belongsToDomain($image->getUri())) {
                 $occuranciesCount++;
             }
         }
-
-        $event = $stopwatch->stop('crawling');
-
-        $this->saveResult($url, $occuranciesCount, $event);
+        
         $this->processedUrls[] = $url;
+
+        return $occuranciesCount;
     }
 
     /**
