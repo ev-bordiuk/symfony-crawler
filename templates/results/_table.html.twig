@@ -1,0 +1,25 @@
+<table class="table-auto w-full">
+    <thead class="text-gray-500">
+        <tr class="bg-gray-200">
+            <th>
+                {{ 'url'|sort_link(sort, order, 'Url')|raw }}
+            </th>
+            <th>
+                {{ 'images_total'|sort_link(sort, order, 'Images')|raw }}
+            </th>
+            <th>
+                {{ 'time_spent'|sort_link(sort, order, 'Time spent(seconds)')|raw }}
+            </th>
+        </tr>
+    </thead>
+    <tbody class="text-gray-600">
+        {% for result in results %}
+            <tr class="border-b hover:bg-gray-200">
+                <td class="px-4 py-1">{{ result.url }}</td>
+                <td class="px-4 py-1 text-center">{{ result.imagesTotal }}</td>
+                <td class="px-4 py-1 text-center">{{ result.timeSpentInSeconds }}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+

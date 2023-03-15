@@ -62,4 +62,9 @@ class Result
 
         return $this;
     }
+
+    public function getTimeSpentInSeconds()
+    {
+        return $this->time_spent / 1000;
+    }
 }

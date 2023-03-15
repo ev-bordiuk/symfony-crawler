@@ -39,6 +39,15 @@ class ResultRepository extends ServiceEntityRepository
         }
     }
 
+
+    public function orderBy(string $sort, string $order = 'DESC')
+    {
+        return $this->createQueryBuilder('r')
+            ->orderBy('r.' . $sort, $order)
+            ->getQuery()
+            ->getResult();
+    }
+
 //    /**
 //     * @return Result[] Returns an array of Result objects
 //     */
