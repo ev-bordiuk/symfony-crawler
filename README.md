@@ -3,7 +3,7 @@
 Simple crawler which calculates domain hosted images on the page(s) and time spent for every particular page visit and html handle, based on [Symfony 6.2.](https://symfony.com/) and [Symfony UX Turbo](https://symfony.com/bundles/ux-turbo/current/index.html).
 
 ### Requirements
-PHP >=8.1, node 14, yarn 1.22.11(optionally), [Symfony CLI](https://symfony.com/download).
+PHP >=8.1, node 14, yarn 1.22.11(optionally), MySQL, [Symfony CLI](https://symfony.com/download).
 
 ### Installation
 ```
