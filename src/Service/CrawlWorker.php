@@ -54,10 +54,10 @@ class CrawlWorker
         $event = $stopwatch->stop('crawling');
         $this->saveResult($url, $occuranciesCount, $event);
 
-        if ($deep <= 0) {
+        if ($deep <= 0 || $this->pagesMaxExceeded()) {
             return;
         }
-        
+
         return $this->proceedDeeper($crawler, $deep - 1);
     }
 
@@ -176,6 +176,8 @@ class CrawlWorker
      */
     private function parsed(string $url): bool
     {
+        $url = rtrim($url, '/');
+
         return in_array($url, $this->processedUrls) ||
                in_array($url . '/', $this->processedUrls);
     }
