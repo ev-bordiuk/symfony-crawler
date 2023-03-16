@@ -10,13 +10,14 @@ use App\Entity\Result;
 
 class CrawlWorker
 {
-    private const INVALID_EXTENSIONS = '/\.js|\.ts|\.gz|#/';
+    private const INVALID_EXTENSIONS = '/\.js|\.ts|\.gz|\.xml|\.pdf|#/';
 
     private $domain;
     private $cssSelector = 'body img';
     private $processedUrls = [];
     private $requestOptions = [];
     private $pageMax;
+    private $deep;
 
     /**
      * @inheritdoc
@@ -39,13 +40,39 @@ class CrawlWorker
             $this->requestOptions['timeout'] = $options['timeout'];
         }
 
-        $this->proceed($targetUrl, $options['deep'] ?? 0);
+        if (array_key_exists('deep', $options)) {
+            $this->deep = $options['deep'];
+        }
+        
+        $this->dispatchUrl($targetUrl, $this->deep);
     }
 
     /**
      * Dispatch chain of actions - handle single page and start walking through child links
      */
-    private function proceed(string $url, int $deep = 0)
+    private function dispatchUrl(string $url, mixed $deep = null)
+    {
+        $crawler = $this->crawlUrl($url);
+
+        if ($this->pagesMaxExceeded()) {
+            return;
+        }
+
+        if ($this->deep === null) {
+            return $this->proceedDeeper($crawler);
+        }
+
+        if ($deep <= 0) {
+            return;
+        }
+
+        return $this->proceedDeeper($crawler, $deep - 1);
+    }
+
+    /**
+     * Handle single page content
+     */
+    private function crawlUrl(string $url): Crawler
     {
         $stopwatch = new Stopwatch();
         $stopwatch->start('crawling');
@@ -54,11 +81,7 @@ class CrawlWorker
         $event = $stopwatch->stop('crawling');
         $this->saveResult($url, $occuranciesCount, $event);
 
-        if ($deep <= 0 || $this->pagesMaxExceeded()) {
-            return;
-        }
-
-        return $this->proceedDeeper($crawler, $deep - 1);
+        return $crawler;
     }
 
     /**
@@ -82,10 +105,10 @@ class CrawlWorker
     /**
      * Follow for every child link
      */
-    private function proceedDeeper(Crawler $crawler, int $deep = 0): void
+    private function proceedDeeper(Crawler $crawler, mixed $deep = null): void
     {
         foreach ($this->fetchInternalLinks($crawler) as $link) {
-            $this->proceed($link, $deep);
+            $this->dispatchUrl($link, $deep);
         }
     }
 
@@ -103,7 +126,7 @@ class CrawlWorker
 
             $url = $link->getUri();
             
-            if ($this->parsed($url) || !$this->belongsToDomain($url)) {
+            if ($this->skipLink($url)) {
                 continue;
             }
 
@@ -159,8 +182,7 @@ class CrawlWorker
      */
     private function belongsToDomain(string $url): bool
     {
-        return !preg_match(CrawlWorker::INVALID_EXTENSIONS, $url) &&
-               preg_match("/(\/\/|\.)$this->domain/", $url);
+        return preg_match("/(\/\/|\.)$this->domain/", $url);
     }
 
     /**
@@ -180,5 +202,12 @@ class CrawlWorker
 
         return in_array($url, $this->processedUrls) ||
                in_array($url . '/', $this->processedUrls);
+    }
+
+    private function skipLink(string $url)
+    {
+        return $this->parsed($url)
+               || !preg_match("/(\/\/)$this->domain/", $url)
+               || preg_match(CrawlWorker::INVALID_EXTENSIONS, $url);
     }
 }
