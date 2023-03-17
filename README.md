@@ -21,7 +21,7 @@ Then start server `symfony server:start`, run `npm run watch` or `npm run dev`.
 See results on `localhost:8000/results`.
 
 ### Command options
-By default command visits only target domain page.
+By default command visits all domain pages.
 
 + `--limit` or `-l` - specify maximum pages to scan.
 + `--depth` or `-d` - specify how deep walk through internal pages.

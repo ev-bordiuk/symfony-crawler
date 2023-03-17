@@ -11,7 +11,7 @@ class LinkManager
     /**
      * Add link to queue
      */
-    public function append(string $url, int $depth)
+    public function append(string $url, int $depth): void
     {
         $this->queue[] = new Link($url, 0);
     }
