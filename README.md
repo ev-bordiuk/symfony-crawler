@@ -23,6 +23,6 @@ See results on `localhost:8000/results`.
 ### Command options
 By default command visits only target domain page.
 
-+ `--pages` or `-p` - specify maximum pages to scan.
-+ `--deep` or `-d` - specify how deep walk through internal pages.
-+ `--timeout` or `-t` - limit request timeout in seconds.
++ `--limit` or `-l` - specify maximum pages to scan.
++ `--depth` or `-d` - specify how deep walk through internal pages.
++ `--timeout` or `-t` - specify request timeout in seconds.

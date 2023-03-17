@@ -7,6 +7,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Stopwatch\Stopwatch;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Entity\Result;
+use App\Service\CrawlWorker\LinkManager;
 
 class CrawlWorker
 {
@@ -14,59 +15,60 @@ class CrawlWorker
 
     private $domain;
     private $cssSelector = 'body img';
-    private $processedUrls = [];
-    private $requestOptions = [];
-    private $pageMax;
-    private $deep;
+    private $timeout;
+    private $pageLimit;
+    private $depth;
 
     /**
      * @inheritdoc
      */
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private HttpClientInterface $httpClient
+        private HttpClientInterface $httpClient,
+        private LinkManager $linkManager
     ) {
     }
 
     /**
      * Start crawling
      */
-    public function perform(string $targetUrl, array $options = []): void
+    public function perform(string $entryUrl, array $options = []): void
     {
-        $this->pageMax = $options['pages'] ?? null;
-        $this->domain = parse_url($targetUrl, PHP_URL_HOST);
+        $this->pageLimit = $options['limit'] ?? null;
+        $this->domain = parse_url($entryUrl, PHP_URL_HOST);
 
         if (array_key_exists('timeout', $options)) {
-            $this->requestOptions['timeout'] = $options['timeout'];
+            $this->timeout = $options['timeout'];
         }
 
-        if (array_key_exists('deep', $options)) {
-            $this->deep = $options['deep'];
+        if (array_key_exists('depth', $options)) {
+            $this->depth = $options['depth'];
         }
         
-        $this->dispatchUrl($targetUrl, $this->deep);
+        $this->linkManager->append($entryUrl, 0);
+        $this->start();
     }
 
     /**
-     * Dispatch chain of actions - handle single page and start walking through child links
+     * Begin all crawlings
      */
-    private function dispatchUrl(string $url, mixed $deep = null)
+    private function start(): void
     {
-        $crawler = $this->crawlUrl($url);
+        foreach ($this->linkManager->next() as $link) {
+            if ($this->pagesLimitExceeded()) {
+                break;
+            }
 
-        if ($this->pagesMaxExceeded()) {
-            return;
+            if ($this->linkManager->processed($link->url)) {
+                continue;
+            }
+
+            $crawler = $this->crawlUrl($link->url);
+
+            if ($this->depth === null || $this->depth > $link->depth) {
+                $this->appendInternalLinks($crawler, $link->depth + 1);
+            }
         }
-
-        if ($this->deep === null) {
-            return $this->proceedDeeper($crawler);
-        }
-
-        if ($deep <= 0) {
-            return;
-        }
-
-        return $this->proceedDeeper($crawler, $deep - 1);
     }
 
     /**
@@ -96,51 +98,37 @@ class CrawlWorker
                 $occuranciesCount++;
             }
         }
-        
-        $this->processedUrls[] = $url;
+
+        $this->linkManager->addProcessed($url);
 
         return $occuranciesCount;
     }
 
     /**
-     * Follow for every child link
+     * Append child links to queue
      */
-    private function proceedDeeper(Crawler $crawler, mixed $deep = null): void
-    {
-        foreach ($this->fetchInternalLinks($crawler) as $link) {
-            $this->dispatchUrl($link, $deep);
-        }
-    }
-
-    /**
-     * Fetch related link or break execution
-     */
-    private function fetchInternalLinks(Crawler $crawler): \Generator
+    private function appendInternalLinks(Crawler $crawler, int $nextDepth): void
     {
         $selector = 'body a';
 
         foreach ($crawler->filter($selector)->links() as $link) {
-            if ($this->pagesMaxExceeded()) {
-                break;    
-            }
-
             $url = $link->getUri();
             
             if ($this->skipLink($url)) {
                 continue;
             }
 
-            yield $url;
+            $this->linkManager->append($url, $nextDepth);
         }
     }
 
     /**
      * Check if pages maximum exceeded
      */
-    private function pagesMaxExceeded(): bool
+    private function pagesLimitExceeded(): bool
     {
-        if ($this->pageMax !== null) {
-            return $this->pageMax <= count($this->processedUrls);
+        if ($this->pageLimit !== null) {
+            return $this->pageLimit <= $this->linkManager->processedSize();
         }
 
         return false;
@@ -167,7 +155,10 @@ class CrawlWorker
      */
     private function getHtml(string $url, array $options = []): string
     {
-        $options = array_merge($this->requestOptions, $options);
+        if ($this->timeout !== null) {
+            $options = array_merge($options, ['timeout' => $this->timeout]);
+        }
+        
         $response = $this->httpClient->request('GET', $url, $options);
 
         if ($response->getStatusCode() === 200) {
@@ -194,19 +185,11 @@ class CrawlWorker
     }
 
     /**
-     * Verify if url is already parsed
+     * Check if link already scrapped or is external
      */
-    private function parsed(string $url): bool
+    private function skipLink(string $url): bool
     {
-        $url = rtrim($url, '/');
-
-        return in_array($url, $this->processedUrls) ||
-               in_array($url . '/', $this->processedUrls);
-    }
-
-    private function skipLink(string $url)
-    {
-        return $this->parsed($url)
+        return $this->linkManager->processed($url)
                || !preg_match("/(\/\/)$this->domain/", $url)
                || preg_match(CrawlWorker::INVALID_EXTENSIONS, $url);
     }

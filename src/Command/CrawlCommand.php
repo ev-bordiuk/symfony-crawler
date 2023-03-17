@@ -50,9 +50,9 @@ class CrawlCommand extends Command
     {
         $this
             ->addArgument('url', InputArgument::REQUIRED, 'Specify target url')
-            ->addOption('timeout', 't', InputOption::VALUE_OPTIONAL, 'Specify max number of seconds for script execution')
-            ->addOption('deep', 'd', InputOption::VALUE_OPTIONAL, 'Specify how deep links should be used')
-            ->addOption('pages', 'p', InputOption::VALUE_OPTIONAL, 'Max number of parsed pages');
+            ->addOption('timeout', 't', InputOption::VALUE_OPTIONAL, 'Specify max number of seconds for request execution')
+            ->addOption('depth', 'd', InputOption::VALUE_OPTIONAL, 'Specify how deep to crawl')
+            ->addOption('limit', 'l', InputOption::VALUE_OPTIONAL, 'Max number of parsed pages');
     }
 
     /**
@@ -77,7 +77,7 @@ class CrawlCommand extends Command
             );
 
             return Command::SUCCESS;
-        } catch (CrawlException | \Exception $e) {
+        } catch (\Exception $e) {
             $this->io->error($e->getMessage());
 
             return Command::FAILURE;
